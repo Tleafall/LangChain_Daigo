@@ -1,0 +1,11 @@
+# Python 虛擬環境與快取
+.venv/
+__pycache__/
+*.pyc
+
+# 向量庫快取（之後如果實作存檔，會放在這裡）
+data/cache/
+
+# 編輯器
+.vscode/
+.idea/

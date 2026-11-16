@@ -1,0 +1,9 @@
+# LangChain 主套件（含 create_agent）
+langchain
+# 連接 Ollama 本機模型
+langchain-ollama
+# 本機 Embeddings（把文字轉成向量）
+langchain-huggingface
+sentence-transformers
+# 文字切段工具
+langchain-text-splitters
