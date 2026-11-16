@@ -16,6 +16,8 @@
 
 import argparse
 import json
+import math
+import random
 import sys
 import time
 from collections import defaultdict
@@ -119,6 +121,14 @@ def load_records(cases: list[dict]) -> list[dict]:
     return records
 
 
+def sign_test(up: int, down: int) -> float:
+    """雙尾符號檢定：如果其實沒差（變好、變差機率各半），看到這麼不平均的機率。"""
+    n, k = up + down, min(up, down)
+    if n == 0:
+        return 1.0
+    return min(1.0, 2 * sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n)
+
+
 def pct(values: list[bool]) -> str:
     return f"{100 * sum(values) / len(values):.1f}%" if values else "—"
 
@@ -158,6 +168,33 @@ def summarize(records: list[dict], cases: list[dict]) -> str:
             cells.append(f"{pct([r['grade']['correct'] for r in rs])}／{pct([r['grade']['fabricated'] for r in rs])}"
                          if rs else "—")
         out.append(f"| {v} | " + " | ".join(cells) + " |")
+
+    # ---------- 兩兩配對比較（以「題」為單位）----------
+    # 同一題的 3 個 seed 結果高度相關，所以把每題 3 次的答對數當成一個樣本，有效樣本是 48 題，不是 144 筆。
+    out += ["", "## 兩兩配對比較（以題為單位）", "",
+            "每題算「後者答對次數 − 前者答對次數」。符號檢定：只看變好、變差的題數（雙尾、精確二項）。"
+            "Bootstrap：對 48 題重抽 10000 次（random seed 0），取答對率差的 2.5%～97.5%。", "",
+            "| 比較 | 答對率差 | 95% 信賴區間 | 變好題數 | 變差題數 | 符號檢定 p | 捏造：有捏造的題數（前者→後者） |",
+            "| --- | --- | --- | --- | --- | --- | --- |"]
+    ids = [c["id"] for c in cases]
+
+    def per_case(v, key):
+        return {i: sum(r["grade"][key] for r in by_variant[v] if r["id"] == i) for i in ids}
+
+    for x, y in [("A_early", "B_rules"), ("B_rules", "C_current"), ("A_early", "C_current")]:
+        if x not in by_variant or y not in by_variant:
+            continue
+        n_runs = len({r["seed"] for r in by_variant[x]})
+        cx, cy = per_case(x, "correct"), per_case(y, "correct")
+        diff = [cy[i] - cx[i] for i in ids]
+        up, down = sum(d > 0 for d in diff), sum(d < 0 for d in diff)
+        rng = random.Random(0)
+        boots = sorted(sum(rng.choice(diff) for _ in ids) / (n_runs * len(ids)) * 100 for _ in range(10000))
+        fx, fy = per_case(x, "fabricated"), per_case(y, "fabricated")
+        out.append(
+            f"| {x} → {y} | {sum(diff) / (n_runs * len(ids)) * 100:+.1f}pp | [{boots[250]:+.1f}, {boots[9749]:+.1f}] "
+            f"| {up} | {down} | {sign_test(up, down):.2f} | {sum(v > 0 for v in fx.values())} → {sum(v > 0 for v in fy.values())} |"
+        )
 
     # ---------- 分類別答對率 ----------
     def group(cat: str) -> str:
